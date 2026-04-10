@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register — FaceAuth</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="auth-page">
+
+<nav class="navbar navbar-dark glass-nav fixed-top">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+            <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
+            <span class="brand-text">Face<span class="accent">Auth</span></span>
+        </a>
+        <a href="/login" class="btn btn-sm btn-outline-light rounded-pill px-3">
+            <i class="bi bi-box-arrow-in-right me-1"></i>Login
+        </a>
+    </div>
+</nav>
+
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="container" style="margin-top:90px;">
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }} alert-dismissible fade show rounded-3" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+<div class="container" style="padding-top: 90px; padding-bottom: 60px;">
+    <div class="row g-4 justify-content-center">
+
+        <!-- ═══ LEFT: FORM ═══ -->
+        <div class="col-lg-5">
+            <div class="auth-card h-100">
+                <div class="auth-card-header">
+                    <i class="bi bi-person-plus-fill auth-header-icon"></i>
+                    <h3>Create Account</h3>
+                    <p class="text-muted">Fill in your details, then capture your face</p>
+                </div>
+
+                <form id="registerForm" action="/do_register" method="POST">
+                    <!-- Hidden input that holds all captured face images -->
+                    <div id="faceImagesContainer"></div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-500">Full Name</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-person-fill input-icon"></i>
+                            <input type="text" class="form-control custom-input"
+                                   name="full_name" id="full_name"
+                                   placeholder="Ali Raza" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-500">Username</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-at input-icon"></i>
+                            <input type="text" class="form-control custom-input"
+                                   name="username" id="username"
+                                   placeholder="ali_raza" required minlength="3"
+                                   autocomplete="off">
+                        </div>
+                        <div id="usernameStatus" class="small mt-1"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-500">Email Address</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-envelope-fill input-icon"></i>
+                            <input type="email" class="form-control custom-input"
+                                   name="email" id="email"
+                                   placeholder="ali@example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-500">Password <small class="text-muted">(backup fallback)</small></label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-lock-fill input-icon"></i>
+                            <input type="password" class="form-control custom-input"
+                                   name="password" id="password"
+                                   placeholder="Min. 6 characters" required minlength="6">
+                        </div>
+                    </div>
+
+                    <!-- Face capture status -->
+                    <div class="capture-status-bar mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-500">Face Images Captured</span>
+                            <span id="captureCountText" class="small text-muted">0 / 6</span>
+                        </div>
+                        <div class="progress" style="height:8px; border-radius:10px;">
+                            <div id="captureProgress"
+                                 class="progress-bar bg-primary"
+                                 role="progressbar" style="width:0%">
+                            </div>
+                        </div>
+                        <div id="captureMessage" class="small text-muted mt-1">
+                            Capture at least 5 images to register.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-custom w-100 btn-lg"
+                            id="submitBtn" disabled>
+                        <i class="bi bi-person-check-fill me-2"></i>
+                        Complete Registration
+                    </button>
+
+                    <p class="text-center mt-3 text-muted small">
+                        Already have an account?
+                        <a href="/login" class="text-primary text-decoration-none">Login here</a>
+                    </p>
+                </form>
+            </div>
+        </div>
+
+        <!-- ═══ RIGHT: WEBCAM ═══ -->
+        <div class="col-lg-5">
+            <div class="auth-card h-100">
+                <div class="auth-card-header">
+                    <i class="bi bi-camera-video-fill auth-header-icon icon-blue"></i>
+                    <h3>Capture Your Face</h3>
+                    <p class="text-muted">Look at the camera — we'll auto-capture 6 images</p>
+                </div>
+
+                <!-- Webcam Preview -->
+                <div class="webcam-container">
+                    <video id="videoFeed" autoplay muted playsinline class="webcam-feed d-none"></video>
+                    <canvas id="captureCanvas" class="d-none"></canvas>
+                    <div id="webcamPlaceholder" class="webcam-placeholder">
+                        <i class="bi bi-camera-video-off-fill placeholder-icon"></i>
+                        <p>Camera not started</p>
+                        <small class="text-muted">Click the button below to begin</small>
+                    </div>
+                    <!-- Scan overlay shown when capturing -->
+                    <div id="scanOverlay" class="scan-overlay d-none">
+                        <div class="scan-box">
+                            <div class="scan-corners">
+                                <div class="sc tl"></div><div class="sc tr"></div>
+                                <div class="sc bl"></div><div class="sc br"></div>
+                            </div>
+                            <div class="scan-laser"></div>
+                        </div>
+                        <div class="scan-label" id="scanLabel">Detecting face...</div>
+                    </div>
+                </div>
+
+                <!-- Captured thumbnails preview -->
+                <div id="thumbnailRow" class="thumbnail-row mt-3 d-none">
+                    <div class="d-flex gap-1 flex-wrap" id="thumbnailContainer"></div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mt-3 d-flex flex-column gap-2">
+                    <button type="button" class="btn btn-camera w-100" id="startCameraBtn">
+                        <i class="bi bi-camera-video-fill me-2"></i>Start Camera
+                    </button>
+                    <button type="button" class="btn btn-success w-100 d-none" id="startCaptureBtn">
+                        <i class="bi bi-record-circle-fill me-2"></i>Start Auto-Capture (6 images)
+                    </button>
+                    <button type="button" class="btn btn-outline-danger w-100 d-none" id="stopCaptureBtn">
+                        <i class="bi bi-stop-circle-fill me-2"></i>Stop Capture
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary w-100 d-none" id="clearImagesBtn">
+                        <i class="bi bi-trash3-fill me-2"></i>Clear & Retake
+                    </button>
+                </div>
+
+                <!-- Instructions -->
+                <div class="instruction-box mt-3">
+                    <h6 class="mb-2"><i class="bi bi-lightbulb-fill text-warning me-1"></i>Tips for best results:</h6>
+                    <ul class="mb-0 small text-muted">
+                        <li>Ensure your face is well-lit (avoid backlight)</li>
+                        <li>Look directly at the camera</li>
+                        <li>Slightly move your head to capture different angles</li>
+                        <li>Remove glasses or hats for initial capture</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/*
+ * register.js (inline)
+ * Handles all webcam and face capture logic for the registration page.
+ *
+ * Flow:
+ *   1. User clicks "Start Camera" → getUserMedia() opens webcam
+ *   2. User clicks "Start Auto-Capture" → every 400ms, grab a frame,
+ *      convert to Base64, add to the hidden form inputs
+ *   3. After 6 images, stop automatically and enable the submit button
+ *
+ * The captured frames are stored as hidden <input> fields in the form
+ * so they are submitted to Flask's /do_register endpoint.
+ */
+
+const video          = document.getElementById("videoFeed");
+const canvas         = document.getElementById("captureCanvas");
+const ctx            = canvas.getContext("2d");
+const placeholder    = document.getElementById("webcamPlaceholder");
+const scanOverlay    = document.getElementById("scanOverlay");
+const scanLabel      = document.getElementById("scanLabel");
+const startCameraBtn = document.getElementById("startCameraBtn");
+const startCaptureBtn= document.getElementById("startCaptureBtn");
+const stopCaptureBtn = document.getElementById("stopCaptureBtn");
+const clearImagesBtn = document.getElementById("clearImagesBtn");
+const submitBtn      = document.getElementById("submitBtn");
+const progressBar    = document.getElementById("captureProgress");
+const countText      = document.getElementById("captureCountText");
+const captureMsg     = document.getElementById("captureMessage");
+const thumbContainer = document.getElementById("thumbnailContainer");
+const thumbRow       = document.getElementById("thumbnailRow");
+const faceContainer  = document.getElementById("faceImagesContainer");
+const usernameInput  = document.getElementById("username");
+const usernameStatus = document.getElementById("usernameStatus");
+
+const TARGET_IMAGES  = 6;
+const CAPTURE_INTERVAL = 400;  // milliseconds between auto-captures
+
+let capturedImages   = [];
+let captureTimer     = null;
+let stream           = null;
+
+// ── Username availability check (AJAX) ─────────────────
+let usernameCheckTimer = null;
+usernameInput.addEventListener("input", () => {
+    clearTimeout(usernameCheckTimer);
+    const val = usernameInput.value.trim();
+    if (val.length < 3) {
+        usernameStatus.textContent = "";
+        return;
+    }
+    usernameCheckTimer = setTimeout(() => {
+        fetch("/check_username", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: val })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.available) {
+                usernameStatus.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Username available</span>';
+            } else {
+                usernameStatus.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Username already taken</span>';
+            }
+        });
+    }, 500);
+});
+
+// ── Start Camera ────────────────────────────────────────
+startCameraBtn.addEventListener("click", async () => {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: "user" }
+        });
+        video.srcObject = stream;
+        video.classList.remove("d-none");
+        placeholder.classList.add("d-none");
+        scanOverlay.classList.remove("d-none");
+        startCameraBtn.classList.add("d-none");
+        startCaptureBtn.classList.remove("d-none");
+        clearImagesBtn.classList.remove("d-none");
+        canvas.width  = 640;
+        canvas.height = 480;
+    } catch (err) {
+        alert("Camera access denied or not available.\nError: " + err.message);
+    }
+});
+
+// ── Start Auto-Capture ──────────────────────────────────
+startCaptureBtn.addEventListener("click", () => {
+    if (capturedImages.length >= TARGET_IMAGES) {
+        alert("Already captured 6 images. Clear and retake if needed.");
+        return;
+    }
+    startCaptureBtn.classList.add("d-none");
+    stopCaptureBtn.classList.remove("d-none");
+    thumbRow.classList.remove("d-none");
+    scanLabel.textContent = "Auto-capturing...";
+
+    captureTimer = setInterval(captureFrame, CAPTURE_INTERVAL);
+});
+
+// ── Stop Capture ────────────────────────────────────────
+stopCaptureBtn.addEventListener("click", () => {
+    stopCapture();
+});
+
+function stopCapture() {
+    clearInterval(captureTimer);
+    captureTimer = null;
+    stopCaptureBtn.classList.add("d-none");
+    if (capturedImages.length < TARGET_IMAGES) {
+        startCaptureBtn.classList.remove("d-none");
+        startCaptureBtn.textContent = `▶ Resume Capture (${capturedImages.length}/${TARGET_IMAGES})`;
+    }
+    scanLabel.textContent = capturedImages.length >= 5
+        ? `✓ ${capturedImages.length} images captured`
+        : "Not enough images. Resume capture.";
+}
+
+// ── Capture a Single Frame ──────────────────────────────
+function captureFrame() {
+    if (capturedImages.length >= TARGET_IMAGES) {
+        stopCapture();
+        return;
+    }
+
+    // Draw current video frame onto canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get Base64 JPEG (quality 0.85)
+    const imgData = canvas.toDataURL("image/jpeg", 0.5);
+    capturedImages.push(imgData);
+
+    // Add to form as hidden input
+    const input = document.createElement("input");
+    input.type  = "hidden";
+    input.name  = "face_images[]";
+    input.value = imgData;
+    faceContainer.appendChild(input);
+
+    // Add thumbnail preview
+    const thumb = document.createElement("img");
+    thumb.src   = imgData;
+    thumb.style.cssText = "width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #333;";
+    thumbContainer.appendChild(thumb);
+    // Keep only last 10 thumbnails visible
+    if (thumbContainer.children.length > 10) {
+        thumbContainer.removeChild(thumbContainer.firstChild);
+    }
+
+    // Update progress
+    const pct = (capturedImages.length / TARGET_IMAGES) * 100;
+    progressBar.style.width = pct + "%";
+    countText.textContent   = `${capturedImages.length} / ${TARGET_IMAGES}`;
+    scanLabel.textContent   = `Captured ${capturedImages.length}/${TARGET_IMAGES}`;
+
+    if (capturedImages.length >= 5) {
+        submitBtn.disabled = false;
+        captureMsg.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Enough images. You can register now or capture more.</span>';
+    }
+
+    if (capturedImages.length >= TARGET_IMAGES) {
+        stopCapture();
+        progressBar.classList.remove("bg-primary");
+        progressBar.classList.add("bg-success");
+        captureMsg.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>All 6 images captured! Ready to register.</span>';
+        scanLabel.textContent = "✓ Capture complete!";
+    }
+}
+
+// ── Clear Images ────────────────────────────────────────
+clearImagesBtn.addEventListener("click", () => {
+    capturedImages = [];
+    faceContainer.innerHTML = "";
+    thumbContainer.innerHTML = "";
+    thumbRow.classList.add("d-none");
+    progressBar.style.width = "0%";
+    progressBar.classList.remove("bg-success");
+    progressBar.classList.add("bg-primary");
+    countText.textContent = "0 / 6";
+    captureMsg.textContent = "Capture at least 5 images to register.";
+    submitBtn.disabled = true;
+    startCaptureBtn.classList.remove("d-none");
+    startCaptureBtn.innerHTML = '<i class="bi bi-record-circle-fill me-2"></i>Start Auto-Capture (6 images)';
+    stopCaptureBtn.classList.add("d-none");
+    scanLabel.textContent = "Camera ready";
+});
+
+// ── Form Submit Validation ──────────────────────────────
+document.getElementById("registerForm").addEventListener("submit", (e) => {
+    if (capturedImages.length < 5) {
+        e.preventDefault();
+        alert("Please capture at least 5 face images before registering.");
+        return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registering...';
+});
+</script>
+</body>
+</html>
